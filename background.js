@@ -1,58 +1,84 @@
 let state = {
   isEnabled: true,
   blockedSites: ['youtube.com', 'reddit.com', 'instagram.com'],
-  schedule: [
-    { start: '10:00', end: '13:00' },
-    { start: '19:00', end: '22:00' }
-  ],
-  password: '1234' // Default password
+  password: '1234'
 };
 
 let unblockUntil = null;
 let blocksToday = 0;
 let todayDate = (new Date()).toISOString().slice(0,10);
+let stateLoaded = false;
+
+// Helper for browser compatibility (browser or chrome)
+const ext = typeof browser !== "undefined" ? browser : chrome;
+
+// Use ext.browserAction or ext.action for badge (browser compatibility)
+function setBadge(text, color) {
+  if (ext.browserAction && ext.browserAction.setBadgeText) {
+    ext.browserAction.setBadgeText({ text });
+    ext.browserAction.setBadgeBackgroundColor({ color });
+  } else if (ext.action && ext.action.setBadgeText) {
+    ext.action.setBadgeText({ text });
+    ext.action.setBadgeBackgroundColor({ color });
+  }
+}
 
 function updateBadge() {
-  chrome.browserAction.setBadgeText({ text: state.isEnabled ? "ON" : "OFF" });
-  chrome.browserAction.setBadgeBackgroundColor({ color: state.isEnabled ? "#d32f2f" : "#388e3c" }); // red or green
+  setBadge(state.isEnabled ? "ON" : "OFF", state.isEnabled ? "#d32f2f" : "#388e3c");
 }
 
-// Load state and unblockUntil from storage
-chrome.storage.local.get(['state', 'unblockUntil'], (result) => {
-  if (result.state) {
-    state = { ...state, ...result.state };
-  } else {
-    chrome.storage.local.set({ state });
-  }
-  unblockUntil = result.unblockUntil || null;
-  updateBadge();
-});
+function ensureBlocklist() {
+  if (!Array.isArray(state.blockedSites)) state.blockedSites = [];
+}
+
+function loadState(callback) {
+  chrome.storage.local.get(['state', 'unblockUntil', 'blocksToday', 'todayDate'], (result) => {
+    if (result.state) state = { ...state, ...result.state };
+    ensureBlocklist();
+    unblockUntil = result.unblockUntil || null;
+    blocksToday = result.blocksToday || 0;
+    todayDate = result.todayDate || todayDate;
+    stateLoaded = true;
+    updateBadge();
+    if (callback) callback();
+  });
+}
+loadState();
 
 function isTemporarilyUnblocked() {
-  if (!unblockUntil) return false;
-  return Date.now() < unblockUntil;
+  return unblockUntil && Date.now() < unblockUntil;
 }
 
-function isInBlockedHours() {
-  const now = new Date();
-  const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  
-  return state.schedule.some(window => {
-    return currentTime >= window.start && currentTime <= window.end;
-  });
+function normalizeDomain(domain) {
+  return (domain || '').replace(/^www\./, '').toLowerCase();
 }
 
 function shouldBlockSite(url) {
-  if (!state.isEnabled || !isInBlockedHours() || isTemporarilyUnblocked()) return false;
-  
-  const hostname = new URL(url).hostname;
-  return state.blockedSites.some(site => hostname.includes(site));
+  if (!stateLoaded) return false;
+  if (!state.isEnabled || isTemporarilyUnblocked()) return false;
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    return false;
+  }
+  hostname = normalizeDomain(hostname);
+  ensureBlocklist();
+  const match = state.blockedSites.some(site => {
+    const normSite = normalizeDomain(site);
+    return hostname === normSite || hostname.endsWith('.' + normSite);
+  });
+  console.log(`[BlocksEverything] Checked: ${hostname} | Blocked: ${match}`);
+  return match;
 }
 
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
+    if (!stateLoaded) {
+      loadState();
+      return { cancel: false };
+    }
     if (shouldBlockSite(details.url)) {
-      // Analytics: count blocks per day
       const nowDate = (new Date()).toISOString().slice(0,10);
       if (nowDate !== todayDate) {
         todayDate = nowDate;
@@ -69,45 +95,51 @@ chrome.webRequest.onBeforeRequest.addListener(
   ["blocking"]
 );
 
-chrome.browserAction.onClicked.addListener(() => {
-  state.isEnabled = !state.isEnabled;
-  chrome.storage.local.set({ state });
-  updateBadge();
-});
+// Replace chrome.browserAction.onClicked with fallback for browser compatibility
+if (ext.browserAction && ext.browserAction.onClicked) {
+  ext.browserAction.onClicked.addListener(() => {
+    state.isEnabled = !state.isEnabled;
+    chrome.storage.local.set({ state });
+    updateBadge();
+  });
+} else if (ext.action && ext.action.onClicked) {
+  ext.action.onClicked.addListener(() => {
+    state.isEnabled = !state.isEnabled;
+    chrome.storage.local.set({ state });
+    updateBadge();
+  });
+}
 
-// Listen for timer unblock requests
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  ensureBlocklist();
   if (msg.action === "unblockForMinutes" && typeof msg.minutes === "number") {
     unblockUntil = Date.now() + msg.minutes * 60 * 1000;
     chrome.storage.local.set({ unblockUntil }, () => {
       updateBadge();
       sendResponse({ success: true, until: unblockUntil });
     });
-    return true; // Indicate async response
+    return true;
   } else if (msg.action === "getUnblockStatus") {
     sendResponse({ unblockUntil });
     return false;
   } else if (msg.action === "getBlocklistState" && msg.domain) {
-    const isBlocked = state.blockedSites.includes(msg.domain);
-    sendResponse({ isBlocked });
+    sendResponse({ isBlocked: state.blockedSites.map(normalizeDomain).includes(normalizeDomain(msg.domain)) });
     return false;
   } else if (msg.action === "addToBlocklist" && msg.domain) {
-    if (!state.blockedSites.includes(msg.domain)) {
+    const nd = normalizeDomain(msg.domain);
+    if (!state.blockedSites.map(normalizeDomain).includes(nd)) {
       state.blockedSites.push(msg.domain);
-      chrome.storage.local.set({ state }, () => {
-        sendResponse({ success: true });
-      });
-      return true; // Indicate async response
+      chrome.storage.local.set({ state }, () => sendResponse({ success: true }));
+      return true;
     } else {
       sendResponse({ success: true });
       return false;
     }
   } else if (msg.action === "removeFromBlocklist" && msg.domain) {
-    state.blockedSites = state.blockedSites.filter(site => site !== msg.domain);
-    chrome.storage.local.set({ state }, () => {
-      sendResponse({ success: true });
-    });
-    return true; // Indicate async response
+    const nd = normalizeDomain(msg.domain);
+    state.blockedSites = state.blockedSites.filter(site => normalizeDomain(site) !== nd);
+    chrome.storage.local.set({ state }, () => sendResponse({ success: true }));
+    return true;
   } else if (msg.action === "getBlockingState") {
     sendResponse({ isEnabled: state.isEnabled });
     return false;
@@ -120,7 +152,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   } else if (msg.action === "getPopupState") {
     chrome.storage.local.get(['state', 'blocksToday', 'todayDate'], (result) => {
-      // Reset blocksToday if date changed
       const nowDate = (new Date()).toISOString().slice(0,10);
       let blocks = result.blocksToday || 0;
       if (result.todayDate !== nowDate) {
@@ -137,7 +168,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-// Periodically check if unblock expired and update badge
 setInterval(() => {
   if (unblockUntil && Date.now() > unblockUntil) {
     unblockUntil = null;

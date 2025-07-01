@@ -33,27 +33,27 @@ document.addEventListener('DOMContentLoaded', () => {
       li.appendChild(removeBtn);
       sitesList.appendChild(li);
     });
-
-    // Load schedule
-    document.getElementById('window1Start').value = state.schedule[0].start;
-    document.getElementById('window1End').value = state.schedule[0].end;
-    document.getElementById('window2Start').value = state.schedule[1].start;
-    document.getElementById('window2End').value = state.schedule[1].end;
   }
 
   document.getElementById('addSite').addEventListener('click', () => {
     const newSite = document.getElementById('newSite').value.trim();
     if (newSite && !state.blockedSites.includes(newSite)) {
       state.blockedSites.push(newSite);
-      loadSettings();
+      chrome.storage.local.set({ state }, loadSettings);
     }
   });
 
   document.getElementById('saveSettings').addEventListener('click', () => {
-    state.schedule = [
-      {
-        start: document.getElementById('window1Start').value,
-        end: document.getElementById('window1End').value
+    chrome.storage.local.set({ state }, () => {
+      alert('Settings saved!');
+    });
+  });
+
+  function removeSite(site) {
+    state.blockedSites = state.blockedSites.filter(s => s !== site);
+    chrome.storage.local.set({ state }, loadSettings);
+  }
+});
       },
       {
         start: document.getElementById('window2Start').value,
@@ -67,6 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function removeSite(site) {
     state.blockedSites = state.blockedSites.filter(s => s !== site);
-    loadSettings();
+    chrome.storage.local.set({ state }, loadSettings);
   }
 });
