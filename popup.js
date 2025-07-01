@@ -1,3 +1,4 @@
+// Helper to get domain from URL
 function getDomain(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
@@ -6,50 +7,68 @@ function getDomain(url) {
   }
 }
 
-function updateUI(domain, isBlocked) {
-  document.getElementById('domain').textContent = domain;
-  document.getElementById('addBtn').disabled = isBlocked;
-  document.getElementById('removeBtn').disabled = !isBlocked;
+let currentDomain = '';
+let blocklist = [];
+
+function renderBlocklist() {
+  const ul = document.getElementById('blockedList');
+  ul.innerHTML = '';
+  blocklist.forEach(domain => {
+    const li = document.createElement('li');
+    li.textContent = domain;
+    const btn = document.createElement('button');
+    btn.textContent = '✕';
+    btn.className = 'remove-btn';
+    btn.onclick = () => {
+      chrome.runtime.sendMessage({ action: "removeFromBlocklist", domain }, () => {
+        blocklist = blocklist.filter(d => d !== domain);
+        renderBlocklist();
+      });
+    };
+    li.appendChild(btn);
+    ul.appendChild(li);
+  });
 }
 
-function updateToggleButton(isEnabled) {
-  const btn = document.getElementById('toggleBlockBtn');
-  btn.textContent = isEnabled ? "Turn OFF Blocking" : "Turn ON Blocking";
-  document.getElementById('toggleStatus').textContent = isEnabled ? "Blocking is ON" : "Blocking is OFF";
+function updateToggleSwitch(isEnabled) {
+  const toggle = document.getElementById('toggleBlockSwitch');
+  const label = document.getElementById('toggleLabel');
+  toggle.checked = isEnabled;
+  label.textContent = isEnabled ? "Blocking is ON" : "Blocking is OFF";
 }
 
 chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   const url = tabs[0].url;
-  const domain = getDomain(url);
+  currentDomain = getDomain(url);
+  document.getElementById('domain').textContent = currentDomain;
 
-  chrome.runtime.sendMessage({ action: "getBlocklistState", domain }, (resp) => {
-    updateUI(domain, resp && resp.isBlocked);
+  // Get blocklist and blocking state
+  chrome.runtime.sendMessage({ action: "getPopupState" }, (resp) => {
+    blocklist = resp.blockedSites || [];
+    renderBlocklist();
+    updateToggleSwitch(resp.isEnabled);
+    document.getElementById('blocksToday').textContent = resp.blocksToday || 0;
+
+    // Disable add button if already blocked
+    document.getElementById('addBtn').disabled = blocklist.includes(currentDomain);
   });
-
-  document.getElementById('addBtn').onclick = () => {
-    chrome.runtime.sendMessage({ action: "addToBlocklist", domain }, (resp) => {
-      document.getElementById('status').textContent = "Added!";
-      updateUI(domain, true);
-    });
-  };
-
-  document.getElementById('removeBtn').onclick = () => {
-    chrome.runtime.sendMessage({ action: "removeFromBlocklist", domain }, (resp) => {
-      document.getElementById('status').textContent = "Removed!";
-      updateUI(domain, false);
-    });
-  };
 });
 
-chrome.runtime.sendMessage({ action: "getBlockingState" }, (resp) => {
-  updateToggleButton(resp && resp.isEnabled);
-  btnState = resp && resp.isEnabled;
-});
-
-let btnState = true;
-document.getElementById('toggleBlockBtn').onclick = () => {
+// Toggle ON/OFF
+document.getElementById('toggleBlockSwitch').addEventListener('change', function() {
   chrome.runtime.sendMessage({ action: "toggleBlocking" }, (resp) => {
-    btnState = resp.isEnabled;
-    updateToggleButton(btnState);
+    updateToggleSwitch(resp.isEnabled);
+  });
+});
+
+// Add current site to blocklist
+document.getElementById('addBtn').onclick = () => {
+  if (!currentDomain) return;
+  chrome.runtime.sendMessage({ action: "addToBlocklist", domain: currentDomain }, () => {
+    if (!blocklist.includes(currentDomain)) {
+      blocklist.push(currentDomain);
+      renderBlocklist();
+      document.getElementById('addBtn').disabled = true;
+    }
   });
 };

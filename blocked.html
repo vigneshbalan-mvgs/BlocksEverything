@@ -3,6 +3,26 @@
 <head>
   <title>Site Blocked</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    body.blocked-page {
+      background: #fff;
+      color: #222;
+    }
+    .blocked-container {
+      background: #fff;
+      color: #222;
+    }
+    @media (prefers-color-scheme: dark) {
+      body.blocked-page {
+        background: #181a1b;
+        color: #eee;
+      }
+      .blocked-container {
+        background: #232527;
+        color: #eee;
+      }
+    }
+  </style>
 </head>
 <body class="blocked-page">
   <div class="blocked-container">

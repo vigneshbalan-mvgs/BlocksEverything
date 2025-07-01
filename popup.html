@@ -2,19 +2,57 @@
 <html>
 <head>
   <style>
-    body { font-family: Arial, sans-serif; min-width: 220px; padding: 10px; }
-    button { margin: 5px 0; width: 100%; }
+    body {
+      font-family: Arial, sans-serif;
+      min-width: 260px;
+      padding: 10px;
+      background: #fff;
+      color: #222;
+    }
+    button, input[type="checkbox"] { margin: 5px 0; }
     #domain { font-weight: bold; }
+    #blockedList { margin: 10px 0; padding: 0; list-style: none; }
+    #blockedList li { display: flex; justify-content: space-between; align-items: center; }
+    #analytics { margin-top: 10px; font-size: 0.95em; color: #555; }
+    .remove-btn { background: #d32f2f; color: #fff; border: none; border-radius: 3px; padding: 2px 6px; cursor: pointer; }
+    .remove-btn:hover { background: #b71c1c; }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #181a1b;
+        color: #eee;
+      }
+      #analytics { color: #bbb; }
+      .remove-btn { background: #b71c1c; color: #fff; }
+      .remove-btn:hover { background: #d32f2f; }
+      input, button {
+        background: #232527;
+        color: #eee;
+        border: 1px solid #333;
+      }
+    }
   </style>
 </head>
 <body>
   <div>
-    <div>Current site: <span id="domain"></span></div>
-    <button id="addBtn">Add to Blocklist</button>
-    <button id="removeBtn">Remove from Blocklist</button>
-    <button id="toggleBlockBtn"></button>
-    <div id="status"></div>
-    <div id="toggleStatus"></div>
+    <label>
+      <input type="checkbox" id="toggleBlockSwitch">
+      <span id="toggleLabel">Blocking is ON</span>
+    </label>
+    <hr>
+    <div>
+      Current site: <span id="domain"></span>
+      <button id="addBtn">Add to Blocklist</button>
+    </div>
+    <hr>
+    <div>
+      <b>Blocked Sites:</b>
+      <ul id="blockedList"></ul>
+    </div>
+    <hr>
+    <div id="analytics">
+      <b>Blocks today:</b> <span id="blocksToday">0</span>
+    </div>
   </div>
   <script src="popup.js"></script>
 </body>

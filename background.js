@@ -9,6 +9,8 @@ let state = {
 };
 
 let unblockUntil = null;
+let blocksToday = 0;
+let todayDate = (new Date()).toISOString().slice(0,10);
 
 function updateBadge() {
   chrome.browserAction.setBadgeText({ text: state.isEnabled ? "ON" : "OFF" });
@@ -50,6 +52,15 @@ function shouldBlockSite(url) {
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (shouldBlockSite(details.url)) {
+      // Analytics: count blocks per day
+      const nowDate = (new Date()).toISOString().slice(0,10);
+      if (nowDate !== todayDate) {
+        todayDate = nowDate;
+        blocksToday = 0;
+        chrome.storage.local.set({ blocksToday, todayDate });
+      }
+      blocksToday++;
+      chrome.storage.local.set({ blocksToday, todayDate });
       return { redirectUrl: chrome.runtime.getURL('blocked.html') };
     }
     return { cancel: false };
@@ -105,6 +116,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     chrome.storage.local.set({ state }, () => {
       updateBadge();
       sendResponse({ isEnabled: state.isEnabled });
+    });
+    return true;
+  } else if (msg.action === "getPopupState") {
+    chrome.storage.local.get(['state', 'blocksToday', 'todayDate'], (result) => {
+      // Reset blocksToday if date changed
+      const nowDate = (new Date()).toISOString().slice(0,10);
+      let blocks = result.blocksToday || 0;
+      if (result.todayDate !== nowDate) {
+        blocks = 0;
+        chrome.storage.local.set({ blocksToday: 0, todayDate: nowDate });
+      }
+      sendResponse({
+        isEnabled: state.isEnabled,
+        blockedSites: state.blockedSites,
+        blocksToday: blocks
+      });
     });
     return true;
   }
