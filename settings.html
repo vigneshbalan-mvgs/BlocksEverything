@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BlocksEverything Settings</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="settings-container">
+    <h1>BlocksEverything Settings</h1>
+    
+    <div class="password-section" id="passwordSection">
+      <h2>Enter Password</h2>
+      <input type="password" id="passwordInput">
+      <button id="unlockBtn">Unlock Settings</button>
+    </div>
+
+    <div class="settings-content hidden" id="settingsContent">
+      <section>
+        <h2>Blocked Sites</h2>
+        <div class="site-input">
+          <input type="text" id="newSite" placeholder="Enter domain (e.g., facebook.com)">
+          <button id="addSite">Add Site</button>
+        </div>
+        <ul id="sitesList"></ul>
+      </section>
+
+      <section>
+        <h2>Blocking Schedule</h2>
+        <div class="schedule-input">
+          <div>
+            <label>Window 1:</label>
+            <input type="time" id="window1Start">
+            <input type="time" id="window1End">
+          </div>
+          <div>
+            <label>Window 2:</label>
+            <input type="time" id="window2Start">
+            <input type="time" id="window2End">
+          </div>
+        </div>
+      </section>
+
+      <button id="saveSettings">Save Settings</button>
+    </div>
+  </div>
+  <script src="settings.js"></script>
+</body>
+</html>
