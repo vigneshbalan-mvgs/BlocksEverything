@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load state
   chrome.storage.local.get(['state'], (result) => {
-    state = result.state;
+    state = result.state || { password: '', blockedSites: [] };
   });
 
   // Password handling
@@ -21,7 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function loadSettings() {
-    // Load blocked sites
     const sitesList = document.getElementById('sitesList');
     sitesList.innerHTML = '';
     state.blockedSites.forEach(site => {
@@ -44,22 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('saveSettings').addEventListener('click', () => {
-    chrome.storage.local.set({ state }, () => {
-      alert('Settings saved!');
-    });
-  });
-
-  function removeSite(site) {
-    state.blockedSites = state.blockedSites.filter(s => s !== site);
-    chrome.storage.local.set({ state }, loadSettings);
-  }
-});
-      },
-      {
-        start: document.getElementById('window2Start').value,
-        end: document.getElementById('window2End').value
-      }
-    ];
     chrome.storage.local.set({ state }, () => {
       alert('Settings saved!');
     });
